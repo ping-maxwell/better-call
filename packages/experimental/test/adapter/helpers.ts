@@ -1,7 +1,15 @@
 import type { Database } from "bun:sqlite";
+import { drizzle } from "drizzle-orm/bun-sqlite";
+import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import type { BetterDBModule } from "./assemble";
 import { createBetterDB } from "./assemble";
-import { memoryDriver, sqliteDriver } from "./driver";
+import {
+	drizzleDriver,
+	memoryDriver,
+	prismaDriver,
+	sqliteDriver,
+} from "./driver";
+import { createTestPrismaClient } from "./prisma-test-client";
 import type { BetterAuthDBSchema } from "./types";
 
 export const testSchema: BetterAuthDBSchema = {
@@ -31,6 +39,27 @@ export const testSchema: BetterAuthDBSchema = {
 	},
 };
 
+/** Drizzle table objects matching {@link testSchema} physical names. */
+export const testDrizzleTables = {
+	user: sqliteTable("user", {
+		id: text("id").primaryKey(),
+		name: text("name").notNull(),
+		email: text("email").notNull().unique(),
+		age: integer("age"),
+		active: integer("active", { mode: "boolean" }),
+	}),
+	token: sqliteTable("token", {
+		id: text("id").primaryKey(),
+		value: text("value").notNull(),
+		remaining: integer("remaining").notNull(),
+	}),
+	session: sqliteTable("session", {
+		id: text("id").primaryKey(),
+		userId: text("userId").notNull(),
+		token: text("token").notNull(),
+	}),
+};
+
 export const memoryDb = (
 	schema: BetterAuthDBSchema = testSchema,
 ): BetterDBModule =>
@@ -45,5 +74,29 @@ export const sqliteDb = (
 ): BetterDBModule =>
 	createBetterDB({
 		driver: sqliteDriver(db),
+		schema,
+	});
+
+export const drizzleDb = (
+	raw: Database,
+	schema: BetterAuthDBSchema = testSchema,
+	tables: typeof testDrizzleTables = testDrizzleTables,
+): BetterDBModule =>
+	createBetterDB({
+		driver: drizzleDriver(drizzle({ client: raw, schema: tables }), {
+			schema: tables,
+			provider: "sqlite",
+		}),
+		schema,
+	});
+
+export const prismaDb = (
+	raw: Database,
+	schema: BetterAuthDBSchema = testSchema,
+): BetterDBModule =>
+	createBetterDB({
+		driver: prismaDriver(createTestPrismaClient(raw), {
+			provider: "sqlite",
+		}),
 		schema,
 	});

@@ -4,7 +4,7 @@ import { ValidationError, v } from "../../src";
 import type { BetterDBModule } from "./assemble";
 import { createBetterDB } from "./assemble";
 import { memoryDriver } from "./driver";
-import { memoryDb, sqliteDb, testSchema } from "./helpers";
+import { drizzleDb, memoryDb, prismaDb, sqliteDb, testSchema } from "./helpers";
 import type { BetterAuthDBSchema } from "./types";
 
 const runContract = (
@@ -213,6 +213,20 @@ runContract("memory", () => memoryDb());
 runContract("sqlite", async () => {
 	const raw = new Database(":memory:");
 	const db = sqliteDb(raw);
+	await db.applySchema({ tables: testSchema });
+	return db;
+});
+
+runContract("drizzle", async () => {
+	const raw = new Database(":memory:");
+	const db = drizzleDb(raw);
+	await db.applySchema({ tables: testSchema });
+	return db;
+});
+
+runContract("prisma", async () => {
+	const raw = new Database(":memory:");
+	const db = prismaDb(raw);
 	await db.applySchema({ tables: testSchema });
 	return db;
 });

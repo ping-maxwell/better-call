@@ -23,6 +23,7 @@
 		// experimental package vocabulary
 		"Customizer",
 		"deriveds",
+		"ilike",
 		"omittable",
 		"renamer",
 		"uncallable",
