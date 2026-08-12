@@ -19,8 +19,8 @@ const storeUse = { use: [adapterVars] };
 
 const quoteIdent = (name: string) => `"${name.replaceAll('"', '""')}"`;
 
-const dbOf = (c: { var: { client: { get: () => unknown } } }): Database => {
-	const db = c.var.client.get() as Database | null;
+const dbOf = (c: { client: unknown }): Database => {
+	const db = c.client as Database | null;
 	if (!db) throw new Error("sqlite storage: client var is not set");
 	return db;
 };
@@ -341,11 +341,11 @@ export const storageBegin = v.fn(
 	"storage.begin",
 	{ input: v.object({}), ...storeUse },
 	(c) => {
-		if (c.var.trx.get() != null) {
+		if (c.trx != null) {
 			throw new Error("nested transactions are not supported");
 		}
 		dbOf(c).run("BEGIN");
-		c.var.trx.set({ active: true });
+		c.trx = { active: true };
 		return { ok: true };
 	},
 );
@@ -355,7 +355,7 @@ export const storageCommit = v.fn(
 	{ input: v.object({}), ...storeUse },
 	(c) => {
 		dbOf(c).run("COMMIT");
-		c.var.trx.set(null);
+		c.trx = null;
 		return { ok: true };
 	},
 );
@@ -369,7 +369,7 @@ export const storageRollback = v.fn(
 		} catch {
 			/* no active transaction */
 		}
-		c.var.trx.set(null);
+		c.trx = null;
 		return { ok: true };
 	},
 );

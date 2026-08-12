@@ -36,8 +36,8 @@ export const getModelName = v.fn(
 	"pipeline.getModelName",
 	{ input: { model: v.string() }, ...vars },
 	(c) => {
-		const schema = c.var.schema.get() as Schema;
-		const config = c.var.adapterConfig.get() as Config;
+		const schema = c.schema as Schema;
+		const config = c.adapterConfig as Config;
 		const table = schema?.[c.input.model];
 		if (table?.modelName) return table.modelName;
 		return config.usePlural ? `${c.input.model}s` : c.input.model;
@@ -48,7 +48,7 @@ export const getFieldName = v.fn(
 	"pipeline.getFieldName",
 	{ input: { model: v.string(), field: v.string() }, ...vars },
 	(c) => {
-		const schema = c.var.schema.get() as Schema;
+		const schema = c.schema as Schema;
 		return (
 			schema?.[c.input.model]?.fields?.[c.input.field]?.fieldName ??
 			c.input.field
@@ -66,8 +66,8 @@ export const cleanWhere = v.fn(
 		use: [adapterVars, { getFieldName }],
 	},
 	(c) => {
-		const schema = c.var.schema.get() as Schema;
-		const config = c.var.adapterConfig.get() as Config;
+		const schema = c.schema as Schema;
+		const config = c.adapterConfig as Config;
 		const where = (c.input.where ?? []) as Array<{
 			field: string;
 			value: unknown;
@@ -103,7 +103,7 @@ export const cleanWhere = v.fn(
 				value = JSON.stringify(value);
 			}
 			return {
-				field: c.use.getFieldName({
+				field: c.getFieldName({
 					model: c.input.model,
 					field: clause.field,
 				}),
@@ -205,7 +205,7 @@ export const validateData = v.fn(
 	},
 	(c) => {
 		if (!c.input.strict) return c.input.data;
-		const schema = c.var.schema.get() as Schema;
+		const schema = c.schema as Schema;
 		const fields = schema?.[c.input.model]?.fields ?? {};
 		const data = c.input.data;
 		const issues: { path: string; message: string }[] = [];
@@ -270,16 +270,16 @@ export const transformInput = v.fn(
 		use: [adapterVars, { getFieldName, validateData, generateId }],
 	},
 	(c) => {
-		const schema = c.var.schema.get() as Schema;
-		const config = c.var.adapterConfig.get() as Config;
-		const data = c.use.validateData(c.input) as Record<string, unknown>;
+		const schema = c.schema as Schema;
+		const config = c.adapterConfig as Config;
+		const data = c.validateData(c.input) as Record<string, unknown>;
 		const fields = schema?.[c.input.model]?.fields ?? {};
 		const out: Record<string, unknown> = {};
 
 		for (const [key, value] of Object.entries(data)) {
 			const attr = fields[key];
 			if (attr?.input === false && c.input.action === "create") continue;
-			const dbKey = c.use.getFieldName({ model: c.input.model, field: key });
+			const dbKey = c.getFieldName({ model: c.input.model, field: key });
 			out[dbKey] = transformValueIn(value, attr, config);
 		}
 
@@ -296,7 +296,7 @@ export const transformInput = v.fn(
 			}
 			// Provided id wins; otherwise generate unless disabled.
 			if (out.id === undefined && !config.disableIdGeneration) {
-				out.id = c.use.generateId({ model: c.input.model });
+				out.id = c.generateId({ model: c.input.model });
 			}
 		}
 
@@ -317,8 +317,8 @@ export const transformOutput = v.fn(
 	(c) => {
 		const data = c.input.data as Record<string, any> | null;
 		if (!data) return null;
-		const schema = c.var.schema.get() as Schema;
-		const config = c.var.adapterConfig.get() as Config;
+		const schema = c.schema as Schema;
+		const config = c.adapterConfig as Config;
 		const fields = schema?.[c.input.model]?.fields ?? {};
 		const inverted = new Map<string, string>();
 		for (const [key, attr] of Object.entries(fields)) {
@@ -353,8 +353,8 @@ export const resolveJoin = v.fn(
 		...vars,
 	},
 	(c) => {
-		const schema = c.var.schema.get() as Schema;
-		const config = c.var.adapterConfig.get() as Config;
+		const schema = c.schema as Schema;
+		const config = c.adapterConfig as Config;
 		const select = c.input.select ? [...c.input.select] : undefined;
 		const transformed: Record<
 			string,

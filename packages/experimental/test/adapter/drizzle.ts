@@ -40,7 +40,7 @@ export type DrizzleProvider = "sqlite" | "pg" | "mysql";
 
 export type DrizzleSchema = Record<string, any>;
 
-/** Handle stored on `c.var.client` for the drizzle storage module. */
+/** Client stored on `c.client` for the drizzle storage module. */
 export type DrizzleClient = {
 	db: any;
 	schema: DrizzleSchema;
@@ -51,10 +51,8 @@ type Row = Record<string, any>;
 
 const storeUse = { use: [adapterVars] };
 
-const clientOf = (c: {
-	var: { client: { get: () => unknown }; trx: { get: () => unknown } };
-}): DrizzleClient => {
-	const client = c.var.client.get() as DrizzleClient | null;
+const clientOf = (c: { client: unknown; trx: unknown }): DrizzleClient => {
+	const client = c.client as DrizzleClient | null;
 	if (!client?.db || !client.schema) {
 		throw new Error("drizzle storage: client var is not set");
 	}
@@ -62,10 +60,8 @@ const clientOf = (c: {
 };
 
 /** Prefer the active transaction handle when begin/commit has opened one. */
-const dbOf = (c: {
-	var: { client: { get: () => unknown }; trx: { get: () => unknown } };
-}) => {
-	const trx = c.var.trx.get() as { db?: unknown } | null;
+const dbOf = (c: { client: unknown; trx: unknown }) => {
+	const trx = c.trx as { db?: unknown } | null;
 	if (trx?.db) return trx.db as any;
 	return clientOf(c).db;
 };
@@ -556,7 +552,7 @@ export const storageBegin = v.fn(
 	"storage.begin",
 	{ input: v.object({}), ...storeUse },
 	(c) => {
-		if (c.var.trx.get() != null) {
+		if (c.trx != null) {
 			throw new Error("nested transactions are not supported");
 		}
 		const client = clientOf(c);
@@ -572,7 +568,7 @@ export const storageBegin = v.fn(
 			);
 		}
 		raw.run("BEGIN");
-		c.var.trx.set({ db: client.db, active: true });
+		c.trx = { db: client.db, active: true };
 		return { ok: true };
 	},
 );
@@ -584,7 +580,7 @@ export const storageCommit = v.fn(
 		const client = clientOf(c);
 		const raw = sqliteClientOf(client.db);
 		raw?.run?.("COMMIT");
-		c.var.trx.set(null);
+		c.trx = null;
 		return { ok: true };
 	},
 );
@@ -599,7 +595,7 @@ export const storageRollback = v.fn(
 		} catch {
 			/* no active transaction */
 		}
-		c.var.trx.set(null);
+		c.trx = null;
 		return { ok: true };
 	},
 );

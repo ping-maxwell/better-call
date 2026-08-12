@@ -37,7 +37,7 @@ export const generateColumn = v.fn(
 		use: [{ runMap }],
 	},
 	(c) => {
-		const sqlType = c.use.runMap(c.input.field);
+		const sqlType = c.runMap(c.input.field);
 		if (sqlType == null) return null;
 		return `${c.input.name} ${sqlType}`;
 	},
@@ -53,7 +53,7 @@ export const generateTable = v.fn(
 	(c) => {
 		const columns: string[] = [];
 		for (const [name, field] of Object.entries(c.input.fields)) {
-			const column = c.use.generateColumn({ name, field });
+			const column = c.generateColumn({ name, field });
 			if (column == null) {
 				throw new Error(
 					`no type mapper for field "${name}" (type=${String(field.type)})`,

@@ -112,7 +112,7 @@ describe("sqlite type generation", () => {
 
 		it("is available through ddl", () => {
 			const migrate = ddl.fn("test.migrate", (c) =>
-				c.use.generateTable({
+				c.generateTable({
 					name: "session",
 					fields: {
 						id: { type: "string", unique: true },

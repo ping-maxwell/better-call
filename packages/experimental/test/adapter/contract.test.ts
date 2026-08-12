@@ -255,11 +255,11 @@ describe("module composition", () => {
 		expect(mod).not.toHaveProperty("client");
 
 		const app = v.fn({ use: [mod] }).fn(async (c) => {
-			const user = await c.use.create({
+			const user = await c.create({
 				model: "user",
 				data: { name: "Ada", email: "ada@example.com" },
 			});
-			return c.use.findOne({
+			return c.findOne({
 				model: "user",
 				where: [{ field: "id", value: user.id }],
 			});

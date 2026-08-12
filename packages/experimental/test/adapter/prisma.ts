@@ -31,7 +31,7 @@ export type PrismaClientLike = {
 	[model: string]: unknown;
 };
 
-/** Handle stored on `c.var.client` for the prisma storage module. */
+/** Client stored on `c.client` for the prisma storage module. */
 export type PrismaClientHandle = {
 	prisma: PrismaClientLike;
 	provider: PrismaProvider;
@@ -57,10 +57,8 @@ const isPrismaNotFoundError = (e: unknown): boolean =>
 	"code" in e &&
 	(e as { code: unknown }).code === "P2025";
 
-const handleOf = (c: {
-	var: { client: { get: () => unknown }; trx: { get: () => unknown } };
-}): PrismaClientHandle => {
-	const client = c.var.client.get() as PrismaClientHandle | null;
+const handleOf = (c: { client: unknown; trx: unknown }): PrismaClientHandle => {
+	const client = c.client as PrismaClientHandle | null;
 	if (!client?.prisma) {
 		throw new Error("prisma storage: client var is not set");
 	}
@@ -68,16 +66,13 @@ const handleOf = (c: {
 };
 
 /** Prefer the active transaction client when begin/commit has opened one. */
-const dbOf = (c: {
-	var: { client: { get: () => unknown }; trx: { get: () => unknown } };
-}): PrismaClientLike => {
-	const trx = c.var.trx.get() as { prisma?: PrismaClientLike } | null;
+const dbOf = (c: { client: unknown; trx: unknown }): PrismaClientLike => {
+	const trx = c.trx as { prisma?: PrismaClientLike } | null;
 	if (trx?.prisma) return trx.prisma;
 	return handleOf(c).prisma;
 };
 
-const inTransaction = (c: { var: { trx: { get: () => unknown } } }): boolean =>
-	c.var.trx.get() != null;
+const inTransaction = (c: { trx: unknown }): boolean => c.trx != null;
 
 const delegateOf = (db: PrismaClientLike, model: string): Delegate => {
 	const delegate = db[model];
@@ -395,7 +390,7 @@ export const storageUpdate = v.fn(
 		const handle = handleOf(c);
 		const db = dbOf(c);
 		const delegate = delegateOf(db, c.input.model);
-		const schema = c.var.schema.get() as BetterAuthDBSchema | null;
+		const schema = c.schema as BetterAuthDBSchema | null;
 		const unique = hasRootUniqueWhereCondition(
 			c.input.model,
 			c.input.where,
@@ -657,7 +652,7 @@ export const storageBegin = v.fn(
 	"storage.begin",
 	{ input: v.object({}), ...storeUse },
 	async (c) => {
-		if (c.var.trx.get() != null) {
+		if (c.trx != null) {
 			throw new Error("nested transactions are not supported");
 		}
 		const handle = handleOf(c);
@@ -672,7 +667,7 @@ export const storageBegin = v.fn(
 			);
 		}
 		await handle.prisma.$executeRawUnsafe("BEGIN");
-		c.var.trx.set({ prisma: handle.prisma, active: true });
+		c.trx = { prisma: handle.prisma, active: true };
 		return { ok: true };
 	},
 );
@@ -683,7 +678,7 @@ export const storageCommit = v.fn(
 	async (c) => {
 		const handle = handleOf(c);
 		await handle.prisma.$executeRawUnsafe?.("COMMIT");
-		c.var.trx.set(null);
+		c.trx = null;
 		return { ok: true };
 	},
 );
@@ -698,7 +693,7 @@ export const storageRollback = v.fn(
 		} catch {
 			/* no active transaction */
 		}
-		c.var.trx.set(null);
+		c.trx = null;
 		return { ok: true };
 	},
 );

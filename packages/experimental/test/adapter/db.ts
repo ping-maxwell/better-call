@@ -42,9 +42,9 @@ type DbInstance = {
  * Does not touch `trx` — the active transaction owns that cell.
  */
 const seedInstance = (c: any, instance: DbInstance) => {
-	c.var.schema.set(instance.schema);
-	c.var.adapterConfig.set(instance.config);
-	c.var.client.set(instance.client);
+	c.schema = instance.schema;
+	c.adapterConfig = instance.config;
+	c.client = instance.client;
 };
 
 /** Ensure every public handler seeds before running — can't forget a call site. */
@@ -63,17 +63,17 @@ const attachJoins = async (
 	select?: string[],
 ) => {
 	if (!baseRow || !joinOpt || !Object.keys(joinOpt).length) {
-		return c.use.transformOutput({
+		return c.transformOutput({
 			model: baseModel,
 			data: baseRow,
 			select,
 		});
 	}
 
-	const config = c.var.adapterConfig.get() as {
+	const config = c.adapterConfig as {
 		supportsJoins?: boolean;
 	};
-	const resolved = c.use.resolveJoin({
+	const resolved = c.resolveJoin({
 		model: baseModel,
 		join: joinOpt,
 		select,
@@ -90,7 +90,7 @@ const attachJoins = async (
 		select?: string[];
 	};
 
-	const transformed = (await c.use.transformOutput({
+	const transformed = (await c.transformOutput({
 		model: baseModel,
 		data: baseRow,
 		select: resolved.select,
@@ -99,7 +99,7 @@ const attachJoins = async (
 	if (config.supportsJoins) {
 		for (const [, meta] of Object.entries(resolved.join)) {
 			const raw = baseRow[meta.logicalModel];
-			transformed[meta.logicalModel] = await c.use.transformOutput({
+			transformed[meta.logicalModel] = await c.transformOutput({
 				model: meta.logicalModel,
 				data: raw ?? (meta.relation === "one-to-one" ? null : []),
 			});
@@ -108,8 +108,7 @@ const attachJoins = async (
 	}
 
 	for (const [physicalModel, meta] of Object.entries(resolved.join)) {
-		const baseFields =
-			(c.var.schema.get() as Schema)?.[baseModel]?.fields ?? {};
+		const baseFields = (c.schema as Schema)?.[baseModel]?.fields ?? {};
 		const fromLogical =
 			Object.entries(baseFields).find(
 				([key, attr]) => (attr.fieldName ?? key) === meta.on.from,
@@ -130,23 +129,23 @@ const attachJoins = async (
 			},
 		];
 		if (meta.relation === "one-to-one") {
-			const joined = await c.use.storageFindOne({
+			const joined = await c.storageFindOne({
 				model: physicalModel,
 				where,
 			});
-			transformed[meta.logicalModel] = await c.use.transformOutput({
+			transformed[meta.logicalModel] = await c.transformOutput({
 				model: meta.logicalModel,
 				data: joined,
 			});
 		} else {
-			const joined = await c.use.storageFindMany({
+			const joined = await c.storageFindMany({
 				model: physicalModel,
 				where,
 				limit: meta.limit,
 			});
 			transformed[meta.logicalModel] = await Promise.all(
 				(joined as unknown[]).map((row) =>
-					c.use.transformOutput({
+					c.transformOutput({
 						model: meta.logicalModel,
 						data: row,
 					}),
@@ -196,19 +195,19 @@ export const createDbApi = (
 		"db.create",
 		{ input: createInput, ...withStorage },
 		withInstance(instance, async (c) => {
-			const table = c.use.getModelName({ model: c.input.model });
-			const input = c.use.transformInput({
+			const table = c.getModelName({ model: c.input.model });
+			const input = c.transformInput({
 				model: c.input.model,
 				data: c.input.data,
 				action: "create",
 				strict: true,
 			});
-			const created = await c.use.storageCreate({
+			const created = await c.storageCreate({
 				model: table,
 				data: input,
 				select: c.input.select,
 			});
-			return (await c.use.transformOutput({
+			return (await c.transformOutput({
 				model: c.input.model,
 				data: created,
 				select: c.input.select,
@@ -220,21 +219,21 @@ export const createDbApi = (
 		"db.findOne",
 		{ input: findOneInput, ...withStorage },
 		withInstance(instance, async (c) => {
-			const table = c.use.getModelName({ model: c.input.model });
-			const where = c.use.cleanWhere({
+			const table = c.getModelName({ model: c.input.model });
+			const where = c.cleanWhere({
 				model: c.input.model,
 				where: c.input.where,
 			});
 			let select = c.input.select;
 			if (c.input.join && Object.keys(c.input.join).length) {
-				const resolved = c.use.resolveJoin({
+				const resolved = c.resolveJoin({
 					model: c.input.model,
 					join: c.input.join,
 					select,
 				});
 				select = resolved.select;
 			}
-			const found = await c.use.storageFindOne({
+			const found = await c.storageFindOne({
 				model: table,
 				where,
 				select,
@@ -247,19 +246,19 @@ export const createDbApi = (
 		"db.findMany",
 		{ input: findManyInput, ...withStorage },
 		withInstance(instance, async (c) => {
-			const config = c.var.adapterConfig.get() as {
+			const config = c.adapterConfig as {
 				defaultFindManyLimit?: number;
 			};
-			const table = c.use.getModelName({ model: c.input.model });
+			const table = c.getModelName({ model: c.input.model });
 			const where = c.input.where
-				? c.use.cleanWhere({
+				? c.cleanWhere({
 						model: c.input.model,
 						where: c.input.where,
 					})
 				: undefined;
 			let select = c.input.select;
 			if (c.input.join && Object.keys(c.input.join).length) {
-				const resolved = c.use.resolveJoin({
+				const resolved = c.resolveJoin({
 					model: c.input.model,
 					join: c.input.join,
 					select,
@@ -268,14 +267,14 @@ export const createDbApi = (
 			}
 			const sortBy = c.input.sortBy
 				? {
-						field: c.use.getFieldName({
+						field: c.getFieldName({
 							model: c.input.model,
 							field: c.input.sortBy.field,
 						}),
 						direction: c.input.sortBy.direction,
 					}
 				: undefined;
-			const rows = await c.use.storageFindMany({
+			const rows = await c.storageFindMany({
 				model: table,
 				where,
 				limit: c.input.limit ?? config.defaultFindManyLimit ?? 100,
@@ -295,14 +294,14 @@ export const createDbApi = (
 		"db.count",
 		{ input: countInput, ...withStorage },
 		withInstance(instance, async (c) => {
-			const table = c.use.getModelName({ model: c.input.model });
+			const table = c.getModelName({ model: c.input.model });
 			const where = c.input.where
-				? c.use.cleanWhere({
+				? c.cleanWhere({
 						model: c.input.model,
 						where: c.input.where,
 					})
 				: undefined;
-			return c.use.storageCount({ model: table, where });
+			return c.storageCount({ model: table, where });
 		}),
 	);
 
@@ -311,22 +310,22 @@ export const createDbApi = (
 		{ input: updateInput, ...withStorage },
 		withInstance(instance, async (c) => {
 			if (!c.input.where.length) return null;
-			const table = c.use.getModelName({ model: c.input.model });
-			const input = c.use.transformInput({
+			const table = c.getModelName({ model: c.input.model });
+			const input = c.transformInput({
 				model: c.input.model,
 				data: c.input.update,
 				action: "update",
 				strict: true,
 			});
-			const updated = await c.use.storageUpdate({
+			const updated = await c.storageUpdate({
 				model: table,
-				where: c.use.cleanWhere({
+				where: c.cleanWhere({
 					model: c.input.model,
 					where: c.input.where,
 				}),
 				update: input,
 			});
-			return c.use.transformOutput({
+			return c.transformOutput({
 				model: c.input.model,
 				data: updated,
 			});
@@ -339,16 +338,16 @@ export const createDbApi = (
 		withInstance(instance, async (c) => {
 			// Empty where matches every row in storage - refuse to wipe the table.
 			if (!c.input.where.length) return 0;
-			const table = c.use.getModelName({ model: c.input.model });
-			const input = c.use.transformInput({
+			const table = c.getModelName({ model: c.input.model });
+			const input = c.transformInput({
 				model: c.input.model,
 				data: c.input.update,
 				action: "update",
 				strict: true,
 			});
-			return c.use.storageUpdateMany({
+			return c.storageUpdateMany({
 				model: table,
-				where: c.use.cleanWhere({
+				where: c.cleanWhere({
 					model: c.input.model,
 					where: c.input.where,
 				}),
@@ -362,10 +361,10 @@ export const createDbApi = (
 		{ input: deleteInput, ...withStorage },
 		withInstance(instance, async (c) => {
 			if (!c.input.where.length) return;
-			const table = c.use.getModelName({ model: c.input.model });
-			await c.use.storageDelete({
+			const table = c.getModelName({ model: c.input.model });
+			await c.storageDelete({
 				model: table,
-				where: c.use.cleanWhere({
+				where: c.cleanWhere({
 					model: c.input.model,
 					where: c.input.where,
 				}),
@@ -378,10 +377,10 @@ export const createDbApi = (
 		{ input: deleteInput, ...withStorage },
 		withInstance(instance, async (c) => {
 			if (!c.input.where.length) return 0;
-			const table = c.use.getModelName({ model: c.input.model });
-			return c.use.storageDeleteMany({
+			const table = c.getModelName({ model: c.input.model });
+			return c.storageDeleteMany({
 				model: table,
-				where: c.use.cleanWhere({
+				where: c.cleanWhere({
 					model: c.input.model,
 					where: c.input.where,
 				}),
@@ -394,13 +393,13 @@ export const createDbApi = (
 		{ input: consumeOneInput, ...withStorage },
 		withInstance(instance, async (c) => {
 			if (!c.input.where.length) return null;
-			const table = c.use.getModelName({ model: c.input.model });
-			const where = c.use.cleanWhere({
+			const table = c.getModelName({ model: c.input.model });
+			const where = c.cleanWhere({
 				model: c.input.model,
 				where: c.input.where,
 			});
-			const row = await c.use.storageConsumeOne({ model: table, where });
-			return c.use.transformOutput({ model: c.input.model, data: row });
+			const row = await c.storageConsumeOne({ model: table, where });
+			return c.transformOutput({ model: c.input.model, data: row });
 		}),
 	);
 
@@ -409,18 +408,18 @@ export const createDbApi = (
 		{ input: incrementOneInput, ...withStorage },
 		withInstance(instance, async (c) => {
 			if (!c.input.where.length) return null;
-			const table = c.use.getModelName({ model: c.input.model });
-			const where = c.use.cleanWhere({
+			const table = c.getModelName({ model: c.input.model });
+			const where = c.cleanWhere({
 				model: c.input.model,
 				where: c.input.where,
 			});
-			const row = await c.use.storageIncrementOne({
+			const row = await c.storageIncrementOne({
 				model: table,
 				where,
 				increment: c.input.increment,
 				set: c.input.set,
 			});
-			return c.use.transformOutput({ model: c.input.model, data: row });
+			return c.transformOutput({ model: c.input.model, data: row });
 		}),
 	);
 
@@ -431,7 +430,7 @@ export const createDbApi = (
 			use: [adapterVars, pipeline, storage, hooks, { generateTable }],
 		},
 		withInstance(instance, async (c) => {
-			const schema = (c.input.tables ?? c.var.schema.get()) as Schema;
+			const schema = (c.input.tables ?? c.schema) as Schema;
 			const statements: string[] = [];
 			for (const [key, table] of Object.entries(schema)) {
 				const name = table.modelName ?? key;
@@ -449,10 +448,10 @@ export const createDbApi = (
 						fieldName: attr.fieldName,
 					};
 				}
-				const sql = c.use.generateTable({ name, fields });
+				const sql = c.generateTable({ name, fields });
 				statements.push(sql);
 			}
-			await c.use.storageApplyDDL({
+			await c.storageApplyDDL({
 				statements,
 				file: c.input.file,
 			});
@@ -493,7 +492,7 @@ export const createDbApi = (
 			use: [adapterVars, pipeline, storage, hooks, api],
 		},
 		withInstance(instance, async (c) => {
-			const config = c.var.adapterConfig.get() as {
+			const config = c.adapterConfig as {
 				supportsTransactions?: boolean;
 			};
 			const run = c.input;
@@ -504,13 +503,13 @@ export const createDbApi = (
 			if (config.supportsTransactions === false) {
 				return run(tx);
 			}
-			await c.use.storageBegin({});
+			await c.storageBegin({});
 			try {
 				const result = await run(tx);
-				await c.use.storageCommit({});
+				await c.storageCommit({});
 				return result;
 			} catch (err) {
-				await c.use.storageRollback({});
+				await c.storageRollback({});
 				throw err;
 			}
 		}),

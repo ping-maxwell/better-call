@@ -24,13 +24,8 @@ import { adapterVars } from "./vars";
 
 const storeUse = { use: [adapterVars] };
 
-const readStore = (c: {
-	var: { client: { get: () => unknown }; trx: { get: () => unknown } };
-}) =>
-	activeTables(
-		c.var.client.get() as MemoryClient | null,
-		c.var.trx.get() as MemoryTrx | null,
-	);
+const readStore = (c: { client: unknown; trx: unknown }) =>
+	activeTables(c.client as MemoryClient | null, c.trx as MemoryTrx | null);
 
 export const storageCreate = v.fn(
 	"storage.create",
@@ -185,13 +180,13 @@ export const storageBegin = v.fn(
 	"storage.begin",
 	{ input: v.object({}), ...storeUse },
 	(c) => {
-		if (c.var.trx.get() != null) {
+		if (c.trx != null) {
 			throw new Error("nested transactions are not supported");
 		}
-		const client = c.var.client.get() as MemoryClient | null;
+		const client = c.client as MemoryClient | null;
 		if (!client) throw new Error("memory storage: client var is not set");
 		const journal = beginMemoryTrx(client);
-		c.var.trx.set(journal);
+		c.trx = journal;
 		return { ok: true };
 	},
 );
@@ -200,11 +195,11 @@ export const storageCommit = v.fn(
 	"storage.commit",
 	{ input: v.object({}), ...storeUse },
 	(c) => {
-		const client = c.var.client.get() as MemoryClient | null;
-		const journal = c.var.trx.get() as MemoryTrx | null;
+		const client = c.client as MemoryClient | null;
+		const journal = c.trx as MemoryTrx | null;
 		if (!client || !journal) return { ok: false };
 		commitMemoryTrx(client, journal);
-		c.var.trx.set(null);
+		c.trx = null;
 		return { ok: true };
 	},
 );
@@ -213,7 +208,7 @@ export const storageRollback = v.fn(
 	"storage.rollback",
 	{ input: v.object({}), ...storeUse },
 	(c) => {
-		c.var.trx.set(null);
+		c.trx = null;
 		return { ok: true };
 	},
 );
