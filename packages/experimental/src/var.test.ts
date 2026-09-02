@@ -176,6 +176,52 @@ describe("var extensions", () => {
 			)(),
 		).toThrow(/vt_account/);
 	});
+
+	it("nested group helpers (c.db.find) widen from mounted extensions", () => {
+		const find = v.fn(
+			"vt.find_account",
+			{ input: account, use: [{ account }] },
+			(c) => c.input,
+		);
+		const core = { db: { find }, account };
+		const run = v.fn({ use: [{ ...core, withTag }] }, (c) => {
+			expectTypeOf(c.db.find)
+				.parameter(0)
+				.toEqualTypeOf<{ id: string; tag: string }>();
+			return c.db.find({ id: "g", tag: "nested" });
+		});
+		expect(run()).toEqual({ id: "g", tag: "nested" });
+	});
+
+	it("merge-var same-key helpers widen like nested groups", () => {
+		const find = v.fn(
+			"vt.merge_find",
+			{ input: account, use: [{ account }] },
+			(c) => c.input,
+		);
+		const store = v.storage(memoryAdapter(), {
+			account: v.var("vt_merge_find_account", {
+				default: null,
+				schema: v.object({ id: v.string() }),
+			}),
+		});
+		const db = v.var("vt_merge_find_db", {
+			merge: true,
+			default: store,
+		});
+		const run = v.fn(
+			{
+				use: [{ db, account }, { db: { find } }, { withTag }],
+			},
+			(c) => {
+				expectTypeOf(c.vt_merge_find_db.find)
+					.parameter(0)
+					.toEqualTypeOf<{ id: string; tag: string }>();
+				return c.vt_merge_find_db.find({ id: "h", tag: "merge" });
+			},
+		);
+		expect(run()).toEqual({ id: "h", tag: "merge" });
+	});
 });
 
 describe("record vars", () => {

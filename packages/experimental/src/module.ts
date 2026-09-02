@@ -748,7 +748,28 @@ export type ExtendedArgs<PL, K extends string> = UnionToIntersection<
  * {@link InputVarExtra}. Storage members get the same scope rewrite as a
  * db var's value ({@link WidenSchemaFns}): collections re-resolve
  * row/`Where` types against mounted `v.extend` / customize.
+ *
+ * Nested GROUPS (`{ db: { findUser } }`) and same-key helpers folded onto
+ * a `merge: true` var are walked too - otherwise `c.db.findUser` would
+ * keep the base signature while a top-level `c.findUser` widened.
  */
+type VarBrandKeys =
+	| "$var"
+	| "name"
+	| "default"
+	| "schema"
+	| "type"
+	| "$source"
+	| "$attrs"
+	| "$merge"
+	| "customize"
+	| "$accessor"
+	| "$derive";
+
+type ApplyOnRecord<F, PL> = {
+	[K in keyof F]: K extends VarBrandKeys ? F[K] : ApplyOn<F[K], PL>;
+};
+
 export type ApplyOn<F, PL> = F extends StorageLike
 	? WidenSchemaFns<F, PL>
 	: F extends FnDefination<
@@ -777,7 +798,15 @@ export type ApplyOn<F, PL> = F extends StorageLike
 					W,
 					O
 				>
-		: F;
+		: F extends { $var: true }
+			? ApplyOnRecord<F, PL>
+			: F extends object
+				? F extends readonly unknown[]
+					? F
+					: string extends keyof F
+						? F
+						: { [K in keyof F]: ApplyOn<F[K], PL> }
+				: F;
 
 export type ApplyOns<Fns, PL> = { [P in keyof Fns]: ApplyOn<Fns[P], PL> };
 
